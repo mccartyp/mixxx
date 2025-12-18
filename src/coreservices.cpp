@@ -59,6 +59,7 @@
 #include "util/translations.h"
 #include "util/versionstore.h"
 #include "vinylcontrol/vinylcontrolmanager.h"
+#include "api/restapiserver.h"
 
 #ifdef __APPLE__
 #include "util/sandbox.h"
@@ -753,6 +754,16 @@ void CoreServices::initialize(QApplication* pApp) {
     // them on startup.
     m_pSkinControls = std::make_unique<SkinControls>();
 
+    // Initialize REST API server
+    qDebug() << "Creating REST API server";
+    m_pRestApiServer = std::make_shared<mixxx::RestApiServer>(this);
+    quint16 apiPort = pConfig->getValue(ConfigKey("[RestApi]", "Port"), 8080);
+    if (m_pRestApiServer->start(apiPort)) {
+        qDebug() << "REST API server started on port" << m_pRestApiServer->port();
+    } else {
+        qDebug() << "REST API server failed to start";
+    }
+
     // Load tracks in args.qlMusicFiles (command line arguments) into player
     // 1 and 2:
     const QList<QString>& musicFiles = m_cmdlineArgs.getMusicFiles();
@@ -919,6 +930,13 @@ void CoreServices::finalize() {
 
     qDebug() << t.elapsed(false).debugMillisWithUnit() << "saving configuration";
     m_pSettingsManager->save();
+
+    // Stop REST API server
+    qDebug() << t.elapsed(false).debugMillisWithUnit() << "stopping REST API server";
+    if (m_pRestApiServer) {
+        m_pRestApiServer->stop();
+    }
+    CLEAR_AND_CHECK_DELETED(m_pRestApiServer);
 
     // SoundManager depend on Engine and Config
     qDebug() << t.elapsed(false).debugMillisWithUnit() << "deleting SoundManager";

@@ -28,6 +28,7 @@ namespace mixxx {
 
 class ControlIndicatorTimer;
 class DbConnectionPool;
+class RestApiServer;
 class ScreensaverManager;
 
 class CoreServices : public QObject {
@@ -102,6 +103,10 @@ class CoreServices : public QObject {
         return m_pScreensaverManager;
     }
 
+    std::shared_ptr<RestApiServer> getRestApiServer() const {
+        return m_pRestApiServer;
+    }
+
     std::shared_ptr<QDialog> makeDlgPreferences() const;
 
   signals:
@@ -147,6 +152,7 @@ class CoreServices : public QObject {
     std::shared_ptr<ConfigObject<ConfigValueKbd>> m_pKbdConfigEmpty;
 
     std::shared_ptr<mixxx::ScreensaverManager> m_pScreensaverManager;
+    std::shared_ptr<mixxx::RestApiServer> m_pRestApiServer;
 
     std::unique_ptr<SkinControls> m_pSkinControls;
     std::unique_ptr<ControlPushButton> m_pTouchShift;
