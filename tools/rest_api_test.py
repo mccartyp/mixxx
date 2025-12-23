@@ -219,9 +219,7 @@ def assert_optional_number(payload: Any, description: str) -> None:
         raise ApiTestError(f"Expected {description} to be numeric")
 
 
-def assert_optional_int_string(payload: Any, description: str) -> None:
-    if payload is None:
-        return
+def assert_int_string(payload: Any, description: str) -> None:
     if not isinstance(payload, str):
         raise ApiTestError(f"Expected {description} to be an integer string")
     if not payload.isdigit():
@@ -256,7 +254,7 @@ def validate_schema(payload: Any, path: str) -> None:
 def validate_system(payload: Any, path: str) -> None:
     assert_keys(payload, ["logical_cores", "cpu_usage_percent", "rss_bytes"], path)
     assert_type(payload["logical_cores"], int, f"{path}.logical_cores")
-    assert_optional_int_string(payload["cpu_usage_percent"], f"{path}.cpu_usage_percent")
+    assert_int_string(payload["cpu_usage_percent"], f"{path}.cpu_usage_percent")
     assert_optional_number(payload["rss_bytes"], f"{path}.rss_bytes")
 
 
