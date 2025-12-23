@@ -8,6 +8,7 @@
 #include <QJsonValue>
 #include <QMutexLocker>
 #include <QThread>
+#include <cmath>
 #ifdef Q_OS_LINUX
 #include <unistd.h>
 #endif
@@ -1058,7 +1059,8 @@ QJsonObject RestApiGateway::systemHealth() const {
     system.insert("logical_cores", QThread::idealThreadCount());
 
     if (const auto cpu = cpuUsagePercent()) {
-        system.insert("cpu_usage_percent", *cpu);
+        system.insert("cpu_usage_percent",
+                QString::number(static_cast<int>(std::lround(*cpu))));
     } else {
         system.insert("cpu_usage_percent", QJsonValue());
     }
@@ -1165,15 +1167,25 @@ std::optional<double> RestApiGateway::cpuUsagePercent() const {
 
     static quint64 s_prevProcess = 0;
     static quint64 s_prevTotal = 0;
+    static std::optional<double> s_lastUsage;
     const auto process = readProcessTime();
     const auto total = readCpuTotals();
     if (!process.has_value() || !total.has_value()) {
-        return std::nullopt;
+        return s_lastUsage;
     }
+
+    const int cores = QThread::idealThreadCount();
     if (s_prevProcess == 0 || s_prevTotal == 0) {
         s_prevProcess = *process;
         s_prevTotal = *total;
-        return std::nullopt;
+        if (*total == 0) {
+            return s_lastUsage;
+        }
+        const double usage = (static_cast<double>(*process) /
+                                     static_cast<double>(*total)) *
+                cores * 100.0;
+        s_lastUsage = usage;
+        return usage;
     }
 
     const quint64 deltaProc = *process - s_prevProcess;
@@ -1181,11 +1193,13 @@ std::optional<double> RestApiGateway::cpuUsagePercent() const {
     s_prevProcess = *process;
     s_prevTotal = *total;
     if (deltaTotal == 0) {
-        return std::nullopt;
+        return s_lastUsage;
     }
 
-    const int cores = QThread::idealThreadCount();
-    const double usage = (static_cast<double>(deltaProc) / static_cast<double>(deltaTotal)) * cores * 100.0;
+    const double usage = (static_cast<double>(deltaProc) /
+                                 static_cast<double>(deltaTotal)) *
+            cores * 100.0;
+    s_lastUsage = usage;
     return usage;
 #else
     return std::nullopt;
