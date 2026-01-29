@@ -356,30 +356,46 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p "${{ matrix.buildenv_basepath }}"
-          # Remove any existing zip to ensure fresh download
+          # Remove any existing files to ensure fresh download
+          rm -rf "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}"
           rm -f "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
-          echo "Downloading artifact ${BUILDENV_NAME}.zip from ${VCPKG_ARTIFACT_REPO} run ${VCPKG_ARTIFACT_RUN_ID}..."
-          # Download the artifact using gh CLI (artifact name includes .zip suffix)
-          gh run download "${VCPKG_ARTIFACT_RUN_ID}" \
+
+          echo "Listing available artifacts from ${VCPKG_ARTIFACT_REPO} run ${VCPKG_ARTIFACT_RUN_ID}..."
+          gh run view "${VCPKG_ARTIFACT_RUN_ID}" --repo "${VCPKG_ARTIFACT_REPO}" || true
+
+          echo "Downloading artifact ${BUILDENV_NAME} from ${VCPKG_ARTIFACT_REPO}..."
+          # Try downloading with artifact name (without .zip suffix first, then with)
+          if ! gh run download "${VCPKG_ARTIFACT_RUN_ID}" \
             --repo "${VCPKG_ARTIFACT_REPO}" \
-            --name "${BUILDENV_NAME}.zip" \
-            --dir "${{ matrix.buildenv_basepath }}"
+            --name "${BUILDENV_NAME}" \
+            --dir "${{ matrix.buildenv_basepath }}"; then
+            echo "Trying with .zip suffix..."
+            gh run download "${VCPKG_ARTIFACT_RUN_ID}" \
+              --repo "${VCPKG_ARTIFACT_REPO}" \
+              --name "${BUILDENV_NAME}.zip" \
+              --dir "${{ matrix.buildenv_basepath }}"
+          fi
+
+          echo "Downloaded contents:"
+          ls -la "${{ matrix.buildenv_basepath }}"
+
           # gh downloads artifact contents to a subdirectory named after the artifact
           # Move the zip file to the expected location
-          if [ -f "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip/${BUILDENV_NAME}.zip" ]; then
-            mv "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip/${BUILDENV_NAME}.zip" "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip.tmp"
-            rm -rf "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
-            mv "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip.tmp" "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
+          if [ -d "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}" ]; then
+            # Find and move the zip file from the subdirectory
+            find "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}" -name "*.zip" -exec mv {} "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" \;
+            rm -rf "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}"
           elif [ -d "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" ]; then
-            # Find the zip inside the directory
+            # Artifact name included .zip, find the actual zip inside
             find "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" -name "*.zip" -exec mv {} "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip.tmp" \;
             rm -rf "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
             mv "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip.tmp" "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
           fi
-          echo "Artifact contents:"
+
+          echo "Final contents:"
           ls -la "${{ matrix.buildenv_basepath }}"
           echo "Verifying zip file:"
-          ls -la "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" || echo "WARNING: zip file not found!"
+          ls -la "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" || echo "ERROR: zip file not found!"
 
       - name: "[macOS] Import Apple code signing identity"
         id: apple_codesign
