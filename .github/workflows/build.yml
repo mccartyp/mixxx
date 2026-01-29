@@ -351,51 +351,78 @@ jobs:
 
       - name: "[Windows] Download vcpkg artifacts from GitHub"
         if: runner.os == 'Windows' && env.VCPKG_ARTIFACT_REPO != '' && env.BUILDENV_ARTIFACT_ID != ''
-        shell: bash
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p "${{ matrix.buildenv_basepath }}"
+          $buildenvPath = "${{ matrix.buildenv_basepath }}"
+          $artifactName = "$env:BUILDENV_NAME"
+          $expectedSha = "$env:BUILDENV_SHA256"
+          $zipPath = Join-Path $buildenvPath "$artifactName.zip"
+          $extractedPath = Join-Path $buildenvPath $artifactName
+
+          Write-Host "Build environment path: $buildenvPath"
+          Write-Host "Artifact name: $artifactName"
+          Write-Host "Expected SHA256: $expectedSha"
+
+          # Create directory if needed
+          New-Item -ItemType Directory -Force -Path $buildenvPath | Out-Null
+
           # Remove any existing files to ensure fresh download
-          rm -rf "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}"
-          rm -f "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
+          if (Test-Path $zipPath) {
+            Write-Host "Removing existing zip: $zipPath"
+            Remove-Item -Force $zipPath
+          }
+          if (Test-Path $extractedPath) {
+            Write-Host "Removing existing extracted directory: $extractedPath"
+            Remove-Item -Recurse -Force $extractedPath
+          }
 
-          echo "Listing available artifacts from ${VCPKG_ARTIFACT_REPO} run ${VCPKG_ARTIFACT_RUN_ID}..."
-          gh run view "${VCPKG_ARTIFACT_RUN_ID}" --repo "${VCPKG_ARTIFACT_REPO}" || true
+          Write-Host "Downloading artifact $artifactName from $env:VCPKG_ARTIFACT_REPO run $env:VCPKG_ARTIFACT_RUN_ID..."
 
-          echo "Downloading artifact ${BUILDENV_NAME} from ${VCPKG_ARTIFACT_REPO}..."
-          # Try downloading with artifact name (without .zip suffix first, then with)
-          if ! gh run download "${VCPKG_ARTIFACT_RUN_ID}" \
-            --repo "${VCPKG_ARTIFACT_REPO}" \
-            --name "${BUILDENV_NAME}" \
-            --dir "${{ matrix.buildenv_basepath }}"; then
-            echo "Trying with .zip suffix..."
-            gh run download "${VCPKG_ARTIFACT_RUN_ID}" \
-              --repo "${VCPKG_ARTIFACT_REPO}" \
-              --name "${BUILDENV_NAME}.zip" \
-              --dir "${{ matrix.buildenv_basepath }}"
-          fi
+          # Download the artifact
+          $downloadDir = Join-Path $buildenvPath "artifact_download"
+          if (Test-Path $downloadDir) {
+            Remove-Item -Recurse -Force $downloadDir
+          }
 
-          echo "Downloaded contents:"
-          ls -la "${{ matrix.buildenv_basepath }}"
+          gh run download $env:VCPKG_ARTIFACT_RUN_ID --repo $env:VCPKG_ARTIFACT_REPO --name $artifactName --dir $downloadDir
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Trying with .zip suffix..."
+            gh run download $env:VCPKG_ARTIFACT_RUN_ID --repo $env:VCPKG_ARTIFACT_REPO --name "$artifactName.zip" --dir $downloadDir
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to download artifact"
+            }
+          }
 
-          # gh downloads artifact contents to a subdirectory named after the artifact
-          # Move the zip file to the expected location
-          if [ -d "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}" ]; then
-            # Find and move the zip file from the subdirectory
-            find "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}" -name "*.zip" -exec mv {} "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" \;
-            rm -rf "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}"
-          elif [ -d "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" ]; then
-            # Artifact name included .zip, find the actual zip inside
-            find "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" -name "*.zip" -exec mv {} "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip.tmp" \;
-            rm -rf "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
-            mv "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip.tmp" "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
-          fi
+          Write-Host "Downloaded contents:"
+          Get-ChildItem -Recurse $downloadDir
 
-          echo "Final contents:"
-          ls -la "${{ matrix.buildenv_basepath }}"
-          echo "Verifying zip file:"
-          ls -la "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" || echo "ERROR: zip file not found!"
+          # Find and move the zip file to the expected location
+          $zipFiles = Get-ChildItem -Recurse -Path $downloadDir -Filter "*.zip"
+          if ($zipFiles.Count -eq 0) {
+            throw "No zip file found in downloaded artifact"
+          }
+          Write-Host "Found zip file: $($zipFiles[0].FullName)"
+          Move-Item -Force $zipFiles[0].FullName $zipPath
+          Remove-Item -Recurse -Force $downloadDir
+
+          # Verify the zip file exists and check SHA256
+          if (-not (Test-Path $zipPath)) {
+            throw "Zip file not found at $zipPath"
+          }
+
+          $actualSha = (Get-FileHash -Algorithm SHA256 $zipPath).Hash.ToLower()
+          Write-Host "Downloaded file SHA256: $actualSha"
+          Write-Host "Expected SHA256: $expectedSha"
+
+          if ($actualSha -ne $expectedSha) {
+            throw "SHA256 mismatch! Expected: $expectedSha, Got: $actualSha"
+          }
+          Write-Host "SHA256 verification passed!"
+
+          Write-Host "Final contents of $buildenvPath`:"
+          Get-ChildItem $buildenvPath
 
       - name: "[macOS] Import Apple code signing identity"
         id: apple_codesign

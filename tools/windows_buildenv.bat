@@ -77,10 +77,20 @@ IF /I "%PLATFORM%"=="arm64" (
     PAUSE
     EXIT /B 1
 )
-REM URL for downloading from downloads.mixxx.org (fallback)
-SET BUILDENV_URL=https://downloads.mixxx.org/dependencies/!BUILDENV_BRANCH!/Windows/!BUILDENV_NAME!.zip
-REM GitHub artifact download URL (requires gh CLI with authentication)
-SET BUILDENV_ARTIFACT_URL=https://github.com/!VCPKG_ARTIFACT_REPO!/actions/runs/!VCPKG_ARTIFACT_RUN_ID!/artifacts/!BUILDENV_ARTIFACT_ID!
+
+REM When using GitHub artifacts, don't set BUILDENV_URL to prevent CMake from
+REM downloading from mixxx.org. The artifact is pre-downloaded in the workflow.
+IF DEFINED VCPKG_ARTIFACT_REPO (
+    IF NOT "!VCPKG_ARTIFACT_REPO!"=="" (
+        REM Using GitHub artifacts - leave BUILDENV_URL empty to prevent fallback download
+        SET BUILDENV_URL=
+        REM GitHub artifact download URL (for reference, actual download done via gh CLI)
+        SET BUILDENV_ARTIFACT_URL=https://github.com/!VCPKG_ARTIFACT_REPO!/actions/runs/!VCPKG_ARTIFACT_RUN_ID!/artifacts/!BUILDENV_ARTIFACT_ID!
+    )
+) ELSE (
+    REM URL for downloading from downloads.mixxx.org
+    SET BUILDENV_URL=https://downloads.mixxx.org/dependencies/!BUILDENV_BRANCH!/Windows/!BUILDENV_NAME!.zip
+)
 
 IF "%~1"=="" (
     REM In case of manual start by double click no arguments are specified: Default to COMMAND_setup
