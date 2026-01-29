@@ -3812,6 +3812,13 @@ if(QT6 AND QT_VERSION VERSION_GREATER_EQUAL 6.4)
         "Qt HttpServer dependencies: ${_qt_httpserver_dependencies}"
       )
     endif()
+    # Find WebSockets component if it's in the dependencies list
+    if("WebSockets" IN_LIST _qt_httpserver_dependencies)
+      find_package(Qt6 COMPONENTS WebSockets QUIET)
+      if(NOT Qt6WebSockets_FOUND)
+        message(WARNING "Qt6 WebSockets component not found but required by HttpServer")
+      endif()
+    endif()
     foreach(component ${_qt_httpserver_dependencies})
       target_link_libraries(mixxx-lib PUBLIC Qt6::${component})
     endforeach()
