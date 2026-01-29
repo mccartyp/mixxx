@@ -341,6 +341,13 @@ jobs:
         if: runner.os != 'Linux'
         run: ${{ matrix.buildenv_script }} name
 
+      - name: "[macOS/Windows] Set up build environment cache"
+        if: runner.os != 'Linux'
+        uses: actions/cache@v5
+        with:
+          path: ${{ matrix.buildenv_basepath }}
+          key: ${{ runner.os }}-buildenv-${{ env.BUILDENV_NAME }}
+
       - name: "[Windows] Download vcpkg artifacts from GitHub"
         if: runner.os == 'Windows' && env.VCPKG_ARTIFACT_REPO != '' && env.BUILDENV_ARTIFACT_ID != ''
         shell: bash
@@ -348,28 +355,30 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p "${{ matrix.buildenv_basepath }}"
-          echo "Downloading artifact ${BUILDENV_ARTIFACT_ID} from ${VCPKG_ARTIFACT_REPO}..."
-          # Download the artifact using gh CLI
+          # Remove any existing zip to ensure fresh download
+          rm -f "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
+          echo "Downloading artifact ${BUILDENV_NAME}.zip from ${VCPKG_ARTIFACT_REPO} run ${VCPKG_ARTIFACT_RUN_ID}..."
+          # Download the artifact using gh CLI (artifact name includes .zip suffix)
           gh run download "${VCPKG_ARTIFACT_RUN_ID}" \
             --repo "${VCPKG_ARTIFACT_REPO}" \
-            --name "${BUILDENV_NAME}" \
+            --name "${BUILDENV_NAME}.zip" \
             --dir "${{ matrix.buildenv_basepath }}"
-          # The artifact is downloaded as a directory, we need to find the zip
-          if [ -f "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" ]; then
-            echo "Artifact downloaded successfully to ${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
-          else
-            # If the zip is inside a subdirectory, move it up
-            find "${{ matrix.buildenv_basepath }}" -name "*.zip" -exec mv {} "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" \;
-            echo "Artifact moved to ${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
+          # gh downloads artifact contents to a subdirectory named after the artifact
+          # Move the zip file to the expected location
+          if [ -f "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip/${BUILDENV_NAME}.zip" ]; then
+            mv "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip/${BUILDENV_NAME}.zip" "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip.tmp"
+            rm -rf "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
+            mv "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip.tmp" "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
+          elif [ -d "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" ]; then
+            # Find the zip inside the directory
+            find "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" -name "*.zip" -exec mv {} "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip.tmp" \;
+            rm -rf "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
+            mv "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip.tmp" "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
           fi
+          echo "Artifact contents:"
           ls -la "${{ matrix.buildenv_basepath }}"
-
-      - name: "[macOS/Windows] Set up build environment cache"
-        if: runner.os != 'Linux'
-        uses: actions/cache@v5
-        with:
-          path: ${{ matrix.buildenv_basepath }}
-          key: ${{ runner.os }}-buildenv-${{ env.BUILDENV_NAME }}
+          echo "Verifying zip file:"
+          ls -la "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" || echo "WARNING: zip file not found!"
 
       - name: "[macOS] Import Apple code signing identity"
         id: apple_codesign
