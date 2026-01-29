@@ -109,25 +109,37 @@ if(
     endif()
   endif()
 
-  if(NOT DEFINED BUILDENV_URL)
-    if(DEFINED ENV{BUILDENV_URL})
-      set(BUILDENV_URL "$ENV{BUILDENV_URL}")
-    elseif(NOT DEFINED BUILDENV_URL)
-      message(FATAL_ERROR "BUILDENV_URL not specified")
+  # Get BUILDENV_NAME from environment or derive from URL
+  if(NOT DEFINED BUILDENV_NAME)
+    if(DEFINED ENV{BUILDENV_NAME})
+      set(BUILDENV_NAME "$ENV{BUILDENV_NAME}")
     endif()
   endif()
 
-  # Extract the filename from the URL
-  get_filename_component(FILENAME_WITH_EXTENSION "${BUILDENV_URL}" NAME)
+  # If BUILDENV_NAME is not set, try to get it from BUILDENV_URL
+  if(NOT DEFINED BUILDENV_NAME OR BUILDENV_NAME STREQUAL "")
+    if(NOT DEFINED BUILDENV_URL)
+      if(DEFINED ENV{BUILDENV_URL})
+        set(BUILDENV_URL "$ENV{BUILDENV_URL}")
+      endif()
+    endif()
 
-  # Remove the extension from the filename (note that our buildenv names contain two dots)
-  string(
-    REGEX REPLACE
-    "\\.[^.]*$"
-    ""
-    BUILDENV_NAME
-    "${FILENAME_WITH_EXTENSION}"
-  )
+    if(DEFINED BUILDENV_URL AND NOT BUILDENV_URL STREQUAL "")
+      # Extract the filename from the URL
+      get_filename_component(FILENAME_WITH_EXTENSION "${BUILDENV_URL}" NAME)
+
+      # Remove the extension from the filename (note that our buildenv names contain two dots)
+      string(
+        REGEX REPLACE
+        "\\.[^.]*$"
+        ""
+        BUILDENV_NAME
+        "${FILENAME_WITH_EXTENSION}"
+      )
+    else()
+      message(FATAL_ERROR "Neither BUILDENV_NAME nor BUILDENV_URL specified")
+    endif()
+  endif()
 
   message(STATUS "BUILDENV_NAME is: ${BUILDENV_NAME}")
 
@@ -144,6 +156,13 @@ if(
     endif()
 
     if(NOT EXISTS "${BUILDENV_BASEPATH}/${BUILDENV_NAME}.zip")
+      if(NOT DEFINED BUILDENV_URL OR BUILDENV_URL STREQUAL "")
+        message(
+          FATAL_ERROR
+          "Build environment zip not found at ${BUILDENV_BASEPATH}/${BUILDENV_NAME}.zip and BUILDENV_URL is not set. "
+          "Please download the build environment manually or set BUILDENV_URL."
+        )
+      endif()
       message(
         STATUS
         "Downloading file ${BUILDENV_URL} to ${BUILDENV_BASEPATH} ..."
@@ -3792,6 +3811,13 @@ if(QT6 AND QT_VERSION VERSION_GREATER_EQUAL 6.4)
         STATUS
         "Qt HttpServer dependencies: ${_qt_httpserver_dependencies}"
       )
+    endif()
+    # Find WebSockets component if it's in the dependencies list
+    if("WebSockets" IN_LIST _qt_httpserver_dependencies)
+      find_package(Qt6 COMPONENTS WebSockets QUIET)
+      if(NOT Qt6WebSockets_FOUND)
+        message(WARNING "Qt6 WebSockets component not found but required by HttpServer")
+      endif()
     endif()
     foreach(component ${_qt_httpserver_dependencies})
       target_link_libraries(mixxx-lib PUBLIC Qt6::${component})

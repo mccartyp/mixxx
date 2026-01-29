@@ -42,6 +42,7 @@ on:
 
 permissions:
   contents: read #  to fetch code (actions/checkout)
+  actions: read #  to download artifacts from other repos (gh run download)
 
 jobs:
   build:
@@ -184,7 +185,7 @@ jobs:
               -DQT6=ON
               -DQML=ON
               -DWAVPACK=ON
-              -DVCPKG_TARGET_TRIPLET=x64-windows-release
+              -DVCPKG_TARGET_TRIPLET=x64-windows
             cc: cl
             cxx: cl
             # TODO: Fix these broken tests on Windows
@@ -212,8 +213,8 @@ jobs:
               -DQT6=ON
               -DQML=ON
               -DWAVPACK=ON
-              -DVCPKG_TARGET_TRIPLET=arm64-windows-release
-              -DVCPKG_DEFAULT_HOST_TRIPLET=arm64-windows-release
+              -DVCPKG_TARGET_TRIPLET=arm64-windows
+              -DVCPKG_DEFAULT_HOST_TRIPLET=arm64-windows
             cc: cl
             cxx: cl
             # TODO: Fix these broken tests on Windows
@@ -347,6 +348,81 @@ jobs:
         with:
           path: ${{ matrix.buildenv_basepath }}
           key: ${{ runner.os }}-buildenv-${{ env.BUILDENV_NAME }}
+
+      - name: "[Windows] Download vcpkg artifacts from GitHub"
+        if: runner.os == 'Windows' && env.VCPKG_ARTIFACT_REPO != '' && env.BUILDENV_ARTIFACT_ID != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $buildenvPath = "${{ matrix.buildenv_basepath }}"
+          $artifactName = "$env:BUILDENV_NAME"
+          $expectedSha = "$env:BUILDENV_SHA256"
+          $zipPath = Join-Path $buildenvPath "$artifactName.zip"
+          $extractedPath = Join-Path $buildenvPath $artifactName
+
+          Write-Host "Build environment path: $buildenvPath"
+          Write-Host "Artifact name: $artifactName"
+          Write-Host "Expected SHA256: $expectedSha"
+
+          # Create directory if needed
+          New-Item -ItemType Directory -Force -Path $buildenvPath | Out-Null
+
+          # Remove any existing files to ensure fresh download
+          if (Test-Path $zipPath) {
+            Write-Host "Removing existing zip: $zipPath"
+            Remove-Item -Force $zipPath
+          }
+          if (Test-Path $extractedPath) {
+            Write-Host "Removing existing extracted directory: $extractedPath"
+            Remove-Item -Recurse -Force $extractedPath
+          }
+
+          Write-Host "Downloading artifact $artifactName from $env:VCPKG_ARTIFACT_REPO run $env:VCPKG_ARTIFACT_RUN_ID..."
+
+          # Download the artifact
+          $downloadDir = Join-Path $buildenvPath "artifact_download"
+          if (Test-Path $downloadDir) {
+            Remove-Item -Recurse -Force $downloadDir
+          }
+
+          gh run download $env:VCPKG_ARTIFACT_RUN_ID --repo $env:VCPKG_ARTIFACT_REPO --name $artifactName --dir $downloadDir
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Trying with .zip suffix..."
+            gh run download $env:VCPKG_ARTIFACT_RUN_ID --repo $env:VCPKG_ARTIFACT_REPO --name "$artifactName.zip" --dir $downloadDir
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to download artifact"
+            }
+          }
+
+          Write-Host "Downloaded contents:"
+          Get-ChildItem -Recurse $downloadDir
+
+          # Find and move the zip file to the expected location
+          $zipFiles = Get-ChildItem -Recurse -Path $downloadDir -Filter "*.zip"
+          if ($zipFiles.Count -eq 0) {
+            throw "No zip file found in downloaded artifact"
+          }
+          Write-Host "Found zip file: $($zipFiles[0].FullName)"
+          Move-Item -Force $zipFiles[0].FullName $zipPath
+          Remove-Item -Recurse -Force $downloadDir
+
+          # Verify the zip file exists and check SHA256
+          if (-not (Test-Path $zipPath)) {
+            throw "Zip file not found at $zipPath"
+          }
+
+          $actualSha = (Get-FileHash -Algorithm SHA256 $zipPath).Hash.ToLower()
+          Write-Host "Downloaded file SHA256: $actualSha"
+          Write-Host "Expected SHA256: $expectedSha"
+
+          if ($actualSha -ne $expectedSha) {
+            throw "SHA256 mismatch! Expected: $expectedSha, Got: $actualSha"
+          }
+          Write-Host "SHA256 verification passed!"
+
+          Write-Host "Final contents of $buildenvPath`:"
+          Get-ChildItem $buildenvPath
 
       - name: "[macOS] Import Apple code signing identity"
         id: apple_codesign
