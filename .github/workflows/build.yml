@@ -341,6 +341,29 @@ jobs:
         if: runner.os != 'Linux'
         run: ${{ matrix.buildenv_script }} name
 
+      - name: "[Windows] Download vcpkg artifacts from GitHub"
+        if: runner.os == 'Windows' && env.VCPKG_ARTIFACT_REPO != '' && env.BUILDENV_ARTIFACT_ID != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "${{ matrix.buildenv_basepath }}"
+          echo "Downloading artifact ${BUILDENV_ARTIFACT_ID} from ${VCPKG_ARTIFACT_REPO}..."
+          # Download the artifact using gh CLI
+          gh run download "${VCPKG_ARTIFACT_RUN_ID}" \
+            --repo "${VCPKG_ARTIFACT_REPO}" \
+            --name "${BUILDENV_NAME}" \
+            --dir "${{ matrix.buildenv_basepath }}"
+          # The artifact is downloaded as a directory, we need to find the zip
+          if [ -f "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" ]; then
+            echo "Artifact downloaded successfully to ${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
+          else
+            # If the zip is inside a subdirectory, move it up
+            find "${{ matrix.buildenv_basepath }}" -name "*.zip" -exec mv {} "${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip" \;
+            echo "Artifact moved to ${{ matrix.buildenv_basepath }}/${BUILDENV_NAME}.zip"
+          fi
+          ls -la "${{ matrix.buildenv_basepath }}"
+
       - name: "[macOS/Windows] Set up build environment cache"
         if: runner.os != 'Linux'
         uses: actions/cache@v5
