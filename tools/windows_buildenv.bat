@@ -45,7 +45,8 @@ IF NOT DEFINED VCPKG_ARTIFACT_RUN_ID (
 IF /I "%PLATFORM%"=="arm64" (
     IF DEFINED BUILDENV_RELEASE (
         SET BUILDENV_BRANCH=2.6
-        SET VCPKG_TARGET_TRIPLET=arm64-windows-release
+        REM Using non-release triplet since custom vcpkg artifacts were built without -release
+        SET VCPKG_TARGET_TRIPLET=arm64-windows
         SET BUILDENV_NAME=mixxx-deps-2.6-arm64-windows-6f8f095
         SET BUILDENV_SHA256=efa174a3e870ddd48b6a3f235b0fa062114412832c5ec8e3d39ce0f14011e355
         SET BUILDENV_ARTIFACT_ID=5297903655
@@ -59,7 +60,8 @@ IF /I "%PLATFORM%"=="arm64" (
 ) ELSE IF /I "%PLATFORM%"=="x64" (
     IF DEFINED BUILDENV_RELEASE (
         SET BUILDENV_BRANCH=2.6
-        SET VCPKG_TARGET_TRIPLET=x64-windows-release
+        REM Using non-release triplet since custom vcpkg artifacts were built without -release
+        SET VCPKG_TARGET_TRIPLET=x64-windows
         SET BUILDENV_NAME=mixxx-deps-2.6-x64-windows-6f8f095
         SET BUILDENV_SHA256=82984135a7f43260b9b8457f65cb56bc2245c5c0ff97a40b94d2e828357b4f3b
         SET BUILDENV_ARTIFACT_ID=5297897473
