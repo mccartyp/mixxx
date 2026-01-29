@@ -42,6 +42,7 @@ on:
 
 permissions:
   contents: read #  to fetch code (actions/checkout)
+  actions: read #  to download artifacts from other repos (gh run download)
 
 jobs:
   build:
