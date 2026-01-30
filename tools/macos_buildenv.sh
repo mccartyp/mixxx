@@ -38,10 +38,12 @@ HOST_ARCH=$(uname -m)  # One of x86_64, arm64, i386, ppc or ppc64
 if [ "$HOST_ARCH" = "x86_64" ]; then
 	if [ -n "${BUILDENV_ARM64_CROSS}" ]; then
 	    if [ -n "${BUILDENV_RELEASE}" ]; then
-	        VCPKG_TARGET_TRIPLET="arm64-osx-min1100-release"
-	        BUILDENV_BRANCH="2.6-rel"
-	        BUILDENV_NAME="mixxx-deps-2.6-arm64-osx-cross-rel-541a925"
-	        BUILDENV_SHA256="42a663c70426ecf9576ce9889d2b24c0aaf1ecfb44fef97a745c4f758bf397a3"
+	        # Using non-release triplet since custom vcpkg artifacts were built without -release
+	        VCPKG_TARGET_TRIPLET="arm64-osx-min1100"
+	        BUILDENV_BRANCH="2.6"
+	        BUILDENV_NAME="mixxx-deps-2.6-arm64-osx-cross-6f8f095"
+	        BUILDENV_SHA256="66f5f5c9b53b76c553909c39a4a7e4647dc3e5f0d0e1c91b8546ef3450a92136"
+	        BUILDENV_ARTIFACT_ID="5297914431"
 	    else
 	        VCPKG_TARGET_TRIPLET="arm64-osx-min1100"
 	        BUILDENV_BRANCH="2.6"

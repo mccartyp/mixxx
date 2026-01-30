@@ -149,6 +149,7 @@ jobs:
           - name: macOS 15 arm64
             os: macos-15-intel
             warnings_fatal: ON
+            # Using non-release triplet since custom vcpkg artifacts were built without -release
             cmake_args: >-
               -DBULK=ON
               -DCOREAUDIO=ON
@@ -158,7 +159,7 @@ jobs:
               -DQT6=ON
               -DQML=ON
               -DWAVPACK=ON
-              -DVCPKG_TARGET_TRIPLET=arm64-osx-min1100-release
+              -DVCPKG_TARGET_TRIPLET=arm64-osx-min1100
             # TODO: Fix this broken test on macOS
             crosscompile: true
             cpack_generator: DragNDrop
