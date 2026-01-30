@@ -56,7 +56,7 @@ if [ "$HOST_ARCH" = "x86_64" ]; then
 	        VCPKG_TARGET_TRIPLET="x64-osx-min1100"
 	        BUILDENV_BRANCH="2.6"
 	        BUILDENV_NAME="mixxx-deps-2.6-x64-osx-6f8f095"
-	        BUILDENV_SHA256="5f236a837cdeea045362fad750c19e36c844cb39faa9d899011faa31cf03b406"
+	        BUILDENV_SHA256="d66c586742ba2ffc3742a4da1bd04f8f3f8d92bd4a7fa62b836d7d3832919464"
 	        BUILDENV_ARTIFACT_ID="5297914233"
 	    else
 	        VCPKG_TARGET_TRIPLET="x64-osx-min1100"
