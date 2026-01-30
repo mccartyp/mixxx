@@ -124,6 +124,7 @@ jobs:
           - name: macOS 15 x64
             os: macos-15-intel
             warnings_fatal: ON
+            # Using non-release triplet since custom vcpkg artifacts were built without -release
             cmake_args: >-
               -DBULK=ON
               -DCOREAUDIO=ON
@@ -133,7 +134,7 @@ jobs:
               -DQT6=ON
               -DQML=OFF
               -DWAVPACK=ON
-              -DVCPKG_TARGET_TRIPLET=x64-osx-min1100-release
+              -DVCPKG_TARGET_TRIPLET=x64-osx-min1100
             # TODO: Fix this broken test on macOS
             ctest_args: --exclude-regex DirectoryDAOTest.relocateDirectory
             cpack_generator: DragNDrop
@@ -148,6 +149,7 @@ jobs:
           - name: macOS 15 arm64
             os: macos-15-intel
             warnings_fatal: ON
+            # Using non-release triplet since custom vcpkg artifacts were built without -release
             cmake_args: >-
               -DBULK=ON
               -DCOREAUDIO=ON
@@ -157,7 +159,7 @@ jobs:
               -DQT6=ON
               -DQML=ON
               -DWAVPACK=ON
-              -DVCPKG_TARGET_TRIPLET=arm64-osx-min1100-release
+              -DVCPKG_TARGET_TRIPLET=arm64-osx-min1100
             # TODO: Fix this broken test on macOS
             crosscompile: true
             cpack_generator: DragNDrop
@@ -425,6 +427,80 @@ jobs:
 
           Write-Host "Final contents of $buildenvPath`:"
           Get-ChildItem $buildenvPath
+
+      - name: "[macOS] Download vcpkg artifacts from GitHub"
+        if: runner.os == 'macOS' && env.VCPKG_ARTIFACT_REPO != '' && env.BUILDENV_ARTIFACT_ID != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          buildenvPath="${{ matrix.buildenv_basepath }}"
+          artifactName="${BUILDENV_NAME}"
+          expectedSha="${BUILDENV_SHA256}"
+          zipPath="${buildenvPath}/${artifactName}.zip"
+          extractedPath="${buildenvPath}/${artifactName}"
+
+          echo "Build environment path: $buildenvPath"
+          echo "Artifact name: $artifactName"
+          echo "Expected SHA256: $expectedSha"
+
+          # Create directory if needed
+          mkdir -p "$buildenvPath"
+
+          # Remove any existing files to ensure fresh download
+          if [ -f "$zipPath" ]; then
+            echo "Removing existing zip: $zipPath"
+            rm -f "$zipPath"
+          fi
+          if [ -d "$extractedPath" ]; then
+            echo "Removing existing extracted directory: $extractedPath"
+            rm -rf "$extractedPath"
+          fi
+
+          echo "Downloading artifact $artifactName from $VCPKG_ARTIFACT_REPO run $VCPKG_ARTIFACT_RUN_ID..."
+
+          # Download the artifact
+          downloadDir="${buildenvPath}/artifact_download"
+          rm -rf "$downloadDir"
+
+          if ! gh run download "$VCPKG_ARTIFACT_RUN_ID" --repo "$VCPKG_ARTIFACT_REPO" --name "$artifactName" --dir "$downloadDir"; then
+            echo "Trying with .zip suffix..."
+            if ! gh run download "$VCPKG_ARTIFACT_RUN_ID" --repo "$VCPKG_ARTIFACT_REPO" --name "${artifactName}.zip" --dir "$downloadDir"; then
+              echo "Failed to download artifact"
+              exit 1
+            fi
+          fi
+
+          echo "Downloaded contents:"
+          ls -laR "$downloadDir"
+
+          # Find and move the zip file to the expected location
+          zipFile=$(find "$downloadDir" -name "*.zip" | head -1)
+          if [ -z "$zipFile" ]; then
+            echo "No zip file found in downloaded artifact"
+            exit 1
+          fi
+          echo "Found zip file: $zipFile"
+          mv -f "$zipFile" "$zipPath"
+          rm -rf "$downloadDir"
+
+          # Verify the zip file exists and check SHA256
+          if [ ! -f "$zipPath" ]; then
+            echo "Zip file not found at $zipPath"
+            exit 1
+          fi
+
+          actualSha=$(shasum -a 256 "$zipPath" | awk '{print $1}')
+          echo "Downloaded file SHA256: $actualSha"
+          echo "Expected SHA256: $expectedSha"
+
+          if [ "$actualSha" != "$expectedSha" ]; then
+            echo "SHA256 mismatch! Expected: $expectedSha, Got: $actualSha"
+            exit 1
+          fi
+          echo "SHA256 verification passed!"
+
+          echo "Final contents of $buildenvPath:"
+          ls -la "$buildenvPath"
 
       - name: "[macOS] Import Apple code signing identity"
         id: apple_codesign
