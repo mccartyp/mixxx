@@ -17,6 +17,19 @@ namespace mixxx::network::rest {
 namespace {
 constexpr int kCertificateLifetimeDays = 825; // OpenSSL default for self-signed certs
 const Logger kLogger("mixxx::network::rest::CertificateGenerator");
+
+/// Convert a path to use forward slashes, which OpenSSL accepts on all platforms.
+/// This is necessary on Windows where QDir::filePath() returns backslash-separated
+/// paths that can cause issues when passed to OpenSSL via command line.
+QString toOpenSslPath(const QString& path) {
+#ifdef Q_OS_WIN
+    QString result = path;
+    result.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    return result;
+#else
+    return path;
+#endif
+}
 } // namespace
 
 CertificateGenerator::CertificateGenerator(QString settingsPath)
@@ -106,8 +119,19 @@ CertificateGenerator::Result CertificateGenerator::generateCertificatePair(
         const QString& certificatePath,
         const QString& privateKeyPath) const {
 #if QT_CONFIG(ssl)
-    if (!ensureDirectoryExists(certificatePath) || !ensureDirectoryExists(privateKeyPath)) {
-        return fail(QObject::tr("Could not create certificate directory"),
+    kLogger.info() << "Generating TLS certificate pair...";
+    kLogger.debug() << "Certificate path:" << certificatePath;
+    kLogger.debug() << "Private key path:" << privateKeyPath;
+
+    if (!ensureDirectoryExists(certificatePath)) {
+        kLogger.warning() << "Failed to create directory for certificate:" << certificatePath;
+        return fail(QObject::tr("Could not create certificate directory for: %1").arg(certificatePath),
+                certificatePath,
+                privateKeyPath);
+    }
+    if (!ensureDirectoryExists(privateKeyPath)) {
+        kLogger.warning() << "Failed to create directory for private key:" << privateKeyPath;
+        return fail(QObject::tr("Could not create certificate directory for: %1").arg(privateKeyPath),
                 certificatePath,
                 privateKeyPath);
     }
@@ -115,6 +139,15 @@ CertificateGenerator::Result CertificateGenerator::generateCertificatePair(
     // Clear out existing files if present.
     QFile::remove(certificatePath);
     QFile::remove(privateKeyPath);
+
+    // Convert paths to forward slashes for OpenSSL compatibility on Windows.
+    // OpenSSL accepts forward slashes on all platforms and this avoids issues
+    // with backslash paths being misinterpreted on Windows.
+    const QString opensslCertPath = toOpenSslPath(certificatePath);
+    const QString opensslKeyPath = toOpenSslPath(privateKeyPath);
+
+    kLogger.debug() << "Generating certificate at:" << opensslCertPath
+                    << "and key at:" << opensslKeyPath;
 
     QProcess openssl;
     QStringList args{
@@ -126,9 +159,9 @@ CertificateGenerator::Result CertificateGenerator::generateCertificatePair(
             QStringLiteral("-subj"),
             QStringLiteral("/CN=Mixxx REST API"),
             QStringLiteral("-keyout"),
-            privateKeyPath,
+            opensslKeyPath,
             QStringLiteral("-out"),
-            certificatePath,
+            opensslCertPath,
             QStringLiteral("-days"),
             QString::number(kCertificateLifetimeDays),
             QStringLiteral("-addext"),
@@ -187,16 +220,23 @@ QString CertificateGenerator::defaultPrivateKeyPath() const {
 bool CertificateGenerator::ensureDirectoryExists(const QString& path) const {
     const QFileInfo info(path);
     QDir directory = info.dir();
+    const QString absoluteDirPath = directory.absolutePath();
+    kLogger.debug() << "Ensuring directory exists for:" << path
+                    << "-> directory:" << absoluteDirPath;
     if (directory.exists()) {
-        QFile::setPermissions(directory.absolutePath(),
+        kLogger.debug() << "Directory already exists:" << absoluteDirPath;
+        QFile::setPermissions(absoluteDirPath,
                 QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
         return true;
     }
+    kLogger.debug() << "Creating directory:" << absoluteDirPath;
     if (!directory.mkpath(QStringLiteral("."))) {
+        kLogger.warning() << "Failed to create directory:" << absoluteDirPath;
         return false;
     }
-    QFile::setPermissions(directory.absolutePath(),
+    QFile::setPermissions(absoluteDirPath,
             QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+    kLogger.debug() << "Successfully created directory:" << absoluteDirPath;
     return true;
 }
 
