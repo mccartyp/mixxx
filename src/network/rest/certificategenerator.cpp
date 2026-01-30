@@ -125,13 +125,17 @@ CertificateGenerator::Result CertificateGenerator::generateCertificatePair(
 
     if (!ensureDirectoryExists(certificatePath)) {
         kLogger.warning() << "Failed to create directory for certificate:" << certificatePath;
-        return fail(QObject::tr("Could not create certificate directory for: %1").arg(certificatePath),
+        return fail(
+                QObject::tr("Could not create certificate directory for: %1")
+                        .arg(certificatePath),
                 certificatePath,
                 privateKeyPath);
     }
     if (!ensureDirectoryExists(privateKeyPath)) {
         kLogger.warning() << "Failed to create directory for private key:" << privateKeyPath;
-        return fail(QObject::tr("Could not create certificate directory for: %1").arg(privateKeyPath),
+        return fail(
+                QObject::tr("Could not create certificate directory for: %1")
+                        .arg(privateKeyPath),
                 certificatePath,
                 privateKeyPath);
     }
