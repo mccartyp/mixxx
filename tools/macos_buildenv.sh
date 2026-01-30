@@ -99,11 +99,13 @@ MIXXX_ROOT="$(realpath "$(dirname "$THIS_SCRIPT_NAME")/..")"
 case "$1" in
     name)
         if [ -n "${GITHUB_ENV}" ]; then
-            echo "BUILDENV_NAME=$BUILDENV_NAME" >> "${GITHUB_ENV}"
-            echo "BUILDENV_SHA256=$BUILDENV_SHA256" >> "${GITHUB_ENV}"
-            echo "VCPKG_ARTIFACT_REPO=$VCPKG_ARTIFACT_REPO" >> "${GITHUB_ENV}"
-            echo "VCPKG_ARTIFACT_RUN_ID=$VCPKG_ARTIFACT_RUN_ID" >> "${GITHUB_ENV}"
-            echo "BUILDENV_ARTIFACT_ID=$BUILDENV_ARTIFACT_ID" >> "${GITHUB_ENV}"
+            {
+                echo "BUILDENV_NAME=$BUILDENV_NAME"
+                echo "BUILDENV_SHA256=$BUILDENV_SHA256"
+                echo "VCPKG_ARTIFACT_REPO=$VCPKG_ARTIFACT_REPO"
+                echo "VCPKG_ARTIFACT_RUN_ID=$VCPKG_ARTIFACT_RUN_ID"
+                echo "BUILDENV_ARTIFACT_ID=$BUILDENV_ARTIFACT_ID"
+            } >> "${GITHUB_ENV}"
         else
             echo "$BUILDENV_NAME"
         fi
