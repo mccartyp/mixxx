@@ -3846,6 +3846,29 @@ if(QT6 AND QT_VERSION VERSION_GREATER_EQUAL 6.4)
     endforeach()
     set(CMAKE_REQUIRED_INCLUDES ${_qt_tls_check_includes})
     set(CMAKE_REQUIRED_LIBRARIES Qt6::HttpServer Qt6::Network)
+    # On Windows, verify the Qt OpenSSL TLS backend plugin is available.
+    # Without it, QSslSocket::supportsSsl() will return false at runtime
+    # even if Qt was built with SSL support and OpenSSL libraries are found.
+    set(_qt_tls_backend_available ON)
+    if(WIN32)
+      if(TARGET Qt${QT_VERSION_MAJOR}::QTlsBackendOpenSSLPlugin)
+        message(STATUS "Qt OpenSSL TLS backend plugin found")
+      else()
+        # Try to find the plugin by looking for its config file
+        find_package(Qt${QT_VERSION_MAJOR}QTlsBackendOpenSSLPlugin QUIET CONFIG)
+        if(TARGET Qt${QT_VERSION_MAJOR}::QTlsBackendOpenSSLPlugin)
+          message(STATUS "Qt OpenSSL TLS backend plugin found via config")
+        else()
+          message(
+            WARNING
+            "Qt OpenSSL TLS backend plugin (QTlsBackendOpenSSLPlugin) not found. "
+            "HTTPS support for the REST API will not work at runtime. "
+            "Ensure Qt was built with OpenSSL support and the TLS plugin is installed."
+          )
+          set(_qt_tls_backend_available OFF)
+        endif()
+      endif()
+    endif()
     set(
       _mixxx_httpserver_tls_api_test
       "
@@ -3925,13 +3948,22 @@ if(QT6 AND QT_VERSION VERSION_GREATER_EQUAL 6.4)
           PUBLIC MIXXX_HAS_HTTP_SERVER_TLS_BIND_API
         )
       endif()
-      message(STATUS "Qt HttpServer TLS APIs available")
+      if(_qt_tls_backend_available)
+        message(STATUS "Qt HttpServer TLS APIs available")
+      else()
+        message(
+          STATUS
+          "Qt HttpServer TLS APIs available but TLS backend plugin not found; "
+          "HTTPS may fail at runtime"
+        )
+      endif()
     else()
       message(
         STATUS
         "Qt HttpServer TLS APIs unavailable; REST API HTTPS disabled"
       )
     endif()
+    unset(_qt_tls_backend_available)
     target_compile_definitions(mixxx-lib PUBLIC MIXXX_HAS_HTTP_SERVER)
     target_sources(
       mixxx-lib
