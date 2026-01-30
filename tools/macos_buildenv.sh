@@ -29,6 +29,12 @@ fi
 
 HOST_ARCH=$(uname -m)  # One of x86_64, arm64, i386, ppc or ppc64
 
+# Custom vcpkg artifact repository settings
+# Set VCPKG_ARTIFACT_REPO to download from a custom vcpkg repository's GitHub Actions artifacts
+# instead of downloads.mixxx.org
+[ -z "$VCPKG_ARTIFACT_REPO" ] && VCPKG_ARTIFACT_REPO="mccartyp/vcpkg"
+[ -z "$VCPKG_ARTIFACT_RUN_ID" ] && VCPKG_ARTIFACT_RUN_ID="21463852143"
+
 if [ "$HOST_ARCH" = "x86_64" ]; then
 	if [ -n "${BUILDENV_ARM64_CROSS}" ]; then
 	    if [ -n "${BUILDENV_RELEASE}" ]; then
@@ -44,10 +50,12 @@ if [ "$HOST_ARCH" = "x86_64" ]; then
 	    fi
 	else
 	    if [ -n "${BUILDENV_RELEASE}" ]; then
-	        VCPKG_TARGET_TRIPLET="x64-osx-min1100-release"
-	        BUILDENV_BRANCH="2.6-rel"
-	        BUILDENV_NAME="mixxx-deps-2.6-x64-osx-rel-541a925"
-	        BUILDENV_SHA256="0aa4ba8850d948b58abc83fd9cdfa9cf65c63ebce35a87e19b6ab5bc14d3abeb"
+	        # Using non-release triplet since custom vcpkg artifacts were built without -release
+	        VCPKG_TARGET_TRIPLET="x64-osx-min1100"
+	        BUILDENV_BRANCH="2.6"
+	        BUILDENV_NAME="mixxx-deps-2.6-x64-osx-6f8f095"
+	        BUILDENV_SHA256="5f236a837cdeea045362fad750c19e36c844cb39faa9d899011faa31cf03b406"
+	        BUILDENV_ARTIFACT_ID="5297914233"
 	    else
 	        VCPKG_TARGET_TRIPLET="x64-osx-min1100"
 	        BUILDENV_BRANCH="2.6"
@@ -74,7 +82,14 @@ else
     exit 1
 fi
 
-BUILDENV_URL="https://downloads.mixxx.org/dependencies/${BUILDENV_BRANCH}/macOS/${BUILDENV_NAME}.zip"
+# When using GitHub artifacts, don't set BUILDENV_URL to prevent CMake from
+# downloading from mixxx.org. The artifact is pre-downloaded in the workflow.
+if [ -n "${VCPKG_ARTIFACT_REPO}" ] && [ -n "${BUILDENV_ARTIFACT_ID}" ]; then
+    BUILDENV_URL=""
+else
+    BUILDENV_URL="https://downloads.mixxx.org/dependencies/${BUILDENV_BRANCH}/macOS/${BUILDENV_NAME}.zip"
+fi
+
 MIXXX_ROOT="$(realpath "$(dirname "$THIS_SCRIPT_NAME")/..")"
 
 [ -z "$BUILDENV_BASEPATH" ] && BUILDENV_BASEPATH="${MIXXX_ROOT}/buildenv"
@@ -83,6 +98,10 @@ case "$1" in
     name)
         if [ -n "${GITHUB_ENV}" ]; then
             echo "BUILDENV_NAME=$BUILDENV_NAME" >> "${GITHUB_ENV}"
+            echo "BUILDENV_SHA256=$BUILDENV_SHA256" >> "${GITHUB_ENV}"
+            echo "VCPKG_ARTIFACT_REPO=$VCPKG_ARTIFACT_REPO" >> "${GITHUB_ENV}"
+            echo "VCPKG_ARTIFACT_RUN_ID=$VCPKG_ARTIFACT_RUN_ID" >> "${GITHUB_ENV}"
+            echo "BUILDENV_ARTIFACT_ID=$BUILDENV_ARTIFACT_ID" >> "${GITHUB_ENV}"
         else
             echo "$BUILDENV_NAME"
         fi
@@ -98,6 +117,9 @@ case "$1" in
         export MIXXX_VCPKG_ROOT="${BUILDENV_PATH}"
         export CMAKE_GENERATOR=Ninja
         export VCPKG_TARGET_TRIPLET="${VCPKG_TARGET_TRIPLET}"
+        export VCPKG_ARTIFACT_REPO
+        export VCPKG_ARTIFACT_RUN_ID
+        export BUILDENV_ARTIFACT_ID
 
         echo_exported_variables() {
             echo "BUILDENV_NAME=${BUILDENV_NAME}"
@@ -107,6 +129,9 @@ case "$1" in
             echo "MIXXX_VCPKG_ROOT=${MIXXX_VCPKG_ROOT}"
             echo "CMAKE_GENERATOR=${CMAKE_GENERATOR}"
             echo "VCPKG_TARGET_TRIPLET=${VCPKG_TARGET_TRIPLET}"
+            echo "VCPKG_ARTIFACT_REPO=${VCPKG_ARTIFACT_REPO}"
+            echo "VCPKG_ARTIFACT_RUN_ID=${VCPKG_ARTIFACT_RUN_ID}"
+            echo "BUILDENV_ARTIFACT_ID=${BUILDENV_ARTIFACT_ID}"
         }
 
         if [ -n "${GITHUB_ENV}" ]; then
