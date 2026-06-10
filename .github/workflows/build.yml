@@ -1,0 +1,77 @@
+name: Self-hosted Linux Mixxx build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  ubuntu-2404-qt6-deb:
+    name: Ubuntu 24.04 Qt6 DEB
+    runs-on: [self-hosted, linux, ubuntu-24.04, mixxx]
+
+    env:
+      CCACHE_DIR: /home/runner/.cache/ccache
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Show runner info
+        run: |
+          hostname
+          whoami
+          cat /etc/os-release
+          cmake --version
+          ninja --version
+          ccache --version || true
+
+      - name: Configure ccache
+        run: |
+          ccache --set-config=max_size=5G
+          ccache --zero-stats
+
+      - name: Prepare build environment
+        run: |
+          tools/debian_buildenv.sh
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DQT6=ON \
+            -DQML=ON \
+            -DBULK=ON \
+            -DFFMPEG=ON \
+            -DLOCALECOMPARE=ON \
+            -DMAD=ON \
+            -DMODPLUG=ON \
+            -DWAVPACK=ON \
+            -DINSTALL_USER_UDEV_RULES=OFF \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build
+        run: |
+          cmake --build build --parallel "$(nproc)"
+
+      - name: Test
+        run: |
+          ctest --test-dir build --output-on-failure
+
+      - name: Package DEB
+        run: |
+          cd build
+          cpack -G DEB
+
+      - name: Show ccache stats
+        if: always()
+        run: |
+          ccache --show-stats || true
+
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ubuntu 24.04 Qt6 DEB
+          path: build/*.deb
+          if-no-files-found: error
